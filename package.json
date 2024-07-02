@@ -2,6 +2,7 @@
 	"name": "i18n-tools",
 	"displayName": "i18n tools",
 	"description": "Enhance using translations with i18n tools",
+	"publisher": "DarkPhoenix",
 	"version": "0.0.1",
 	"engines": {
 		"vscode": "^1.90.0"
@@ -9,6 +10,10 @@
 	"categories": ["Other"],
 	"activationEvents": [],
 	"main": "./extension.js",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/0DarkPhoenix/i18n-tools.git"
+	},
 	"contributes": {
 		"commands": [
 			{

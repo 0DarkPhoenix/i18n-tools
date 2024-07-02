@@ -7,6 +7,7 @@
 	"engines": {
 		"vscode": "^1.90.0"
 	},
+	"icon": "images/logo.png",
 	"categories": ["Other"],
 	"activationEvents": [],
 	"main": "./extension.js",

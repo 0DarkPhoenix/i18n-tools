@@ -42,9 +42,7 @@ function activate(context) {
 				}
 
 				if (languageFiles.length === 0) {
-					vscode.window.showInformationMessage(
-						"No corresponding language files found",
-					);
+					vscode.window.showInformationMessage("No corresponding language files found");
 					return;
 				}
 
@@ -52,7 +50,9 @@ function activate(context) {
 				for (const file of languageFiles) {
 					const fileUri = vscode.Uri.file(file);
 					const doc = await vscode.workspace.openTextDocument(fileUri);
-					await vscode.window.showTextDocument(doc, { preview: false });
+					await vscode.window.showTextDocument(doc, {
+						preview: false,
+					});
 				}
 			} catch (error) {
 				vscode.window.showErrorMessage(`Error: ${error.message}`);

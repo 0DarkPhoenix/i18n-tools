@@ -20,6 +20,10 @@
 			{
 				"command": "i18n-tools.openAllLanguageVariants",
 				"title": "i18n Tools: Open All Language Variants"
+			},
+			{
+				"command": "i18n-tools.findTranslationItem",
+				"title": "i18n Tools: Find Translation Item"
 			}
 		],
 		"menus": {

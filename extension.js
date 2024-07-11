@@ -76,44 +76,69 @@ function activate(context) {
 			const i18nFolder = `${vscode.workspace.workspaceFolders[0].uri.fsPath}/src/i18n`;
 
 			try {
-				let currentPath = i18nFolder;
-				let fileContent;
+				const languageFolders = await fs.readdir(i18nFolder, { withFileTypes: true });
+				const results = [];
 
-				for (let i = 0; i < keys.length; i++) {
-					const key = keys[i];
-					const isLastKey = i === keys.length - 1;
-					const foundItem = await findItemRecursive(currentPath, key, i === 0);
+				for (const langFolder of languageFolders) {
+					if (langFolder.isDirectory()) {
+						let currentPath = `${i18nFolder}/${langFolder.name}`;
+						let fileContent;
+						let filePath;
 
-					if (!foundItem) {
-						vscode.window.showErrorMessage(
-							`Key "${key}" not found in path "${currentPath}"`,
-						);
-						return;
-					}
+						for (let i = 0; i < keys.length; i++) {
+							const key = keys[i];
+							const foundItem = await findItemRecursive(currentPath, key, i === 0);
 
-					if (foundItem.isFile && foundItem.name.endsWith(".js")) {
-						fileContent = await fs.readFile(foundItem.path, "utf-8");
-						break;
-					}
+							if (!foundItem) {
+								break;
+							}
 
-					currentPath = foundItem.path;
-				}
+							if (foundItem.isFile && foundItem.name.endsWith(".js")) {
+								fileContent = await fs.readFile(foundItem.path, "utf-8");
+								filePath = foundItem.path;
+								break;
+							}
 
-				if (fileContent) {
-					const fileObject = JSON.parse(fileContent);
-					let value = fileObject;
+							currentPath = foundItem.path;
+						}
 
-					for (const key of keys.slice(keys.indexOf(key) + 1)) {
-						value = value[key];
-						if (value === undefined) {
-							vscode.window.showErrorMessage(`Key "${key}" not found in object`);
-							return;
+						if (fileContent) {
+							const match = fileContent.match(/=\s*({[\s\S]*?})/);
+							if (match) {
+								const objectContent = match[1];
+								const fileObject = new Function(`return ${objectContent}`)();
+								const lastKey = keys[keys.length - 1];
+								const value = fileObject[lastKey];
+
+								if (value !== undefined) {
+									results.push({ lang: langFolder.name, value, filePath });
+									const lineNumber = fileContent
+										.split("\n")
+										.findIndex((line) => line.includes(lastKey));
+									if (lineNumber !== -1) {
+										const uri = vscode.Uri.file(filePath);
+										const line = fileContent.split("\n")[lineNumber];
+										const position = new vscode.Position(
+											lineNumber,
+											line.length,
+										);
+										const selection = new vscode.Selection(position, position);
+										await vscode.window.showTextDocument(uri, {
+											selection,
+											preview: false,
+										});
+									}
+								}
+							}
 						}
 					}
+				}
 
-					vscode.window.showInformationMessage(`Found value: ${value}`);
+				if (results.length > 0) {
+					const message = results.map((r) => `${r.lang}: ${r.value}`).join("\n");
+					vscode.window.showInformationMessage(`Found values:\n${message}`);
 				} else {
-					vscode.window.showErrorMessage("No JavaScript file found");
+					vscode.window.showErrorMessage("No translations found in any language folder");
 				}
 			} catch (error) {
 				vscode.window.showErrorMessage(`Error: ${error.message}`);
@@ -149,25 +174,6 @@ function activate(context) {
 
 	context.subscriptions.push(openAllLanguageVariants);
 	context.subscriptions.push(findTranslationItem);
-}
-
-async function findItemRecursive(dir, name) {
-	const items = await fs.readdir(dir, { withFileTypes: true });
-
-	for (const item of items) {
-		if (item.name === name) {
-			return { path: path.join(dir, item.name), isFile: item.isFile() };
-		}
-
-		if (item.isDirectory()) {
-			const found = await findItemRecursive(path.join(dir, item.name), name);
-			if (found) {
-				return found;
-			}
-		}
-	}
-
-	return null;
 }
 
 module.exports = {

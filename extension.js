@@ -1,6 +1,8 @@
 const vscode = require("vscode");
 const path = require("node:path");
 const fs = require("node:fs/promises");
+const acorn = require("acorn");
+const { simple } = require("acorn-walk");
 
 /**
  * @param {vscode.ExtensionContext} context
@@ -10,7 +12,9 @@ function activate(context) {
 		"i18n-tools.openAllLanguageVariants",
 		async (uri) => {
 			if (!uri || !uri.fsPath) {
-				vscode.window.showErrorMessage("No file selected");
+				vscode.window.showErrorMessage(
+					"No file selected. Please select a file in the Explorer.",
+				);
 				return;
 			}
 
@@ -19,7 +23,7 @@ function activate(context) {
 			const i18nIndex = parts.lastIndexOf("i18n");
 
 			if (i18nIndex === -1) {
-				vscode.window.showErrorMessage("Not an i18n file");
+				vscode.window.showErrorMessage(`Not an i18n file: ${filePath}`);
 				return;
 			}
 
@@ -36,25 +40,33 @@ function activate(context) {
 						await fs.access(fullPath);
 						languageFiles.push(fullPath);
 					} catch (error) {
-						// File doesn't exist, skip
+						throw new Error(`File not found: ${fullPath}`);
 					}
 				}
 
 				if (languageFiles.length === 0) {
-					vscode.window.showInformationMessage("No corresponding language files found");
+					vscode.window.showInformationMessage(
+						`No corresponding language files found for: ${relativePath}`,
+					);
 					return;
 				}
 
 				// Open each language file
 				for (const file of languageFiles) {
-					const fileUri = vscode.Uri.file(file);
-					const doc = await vscode.workspace.openTextDocument(fileUri);
-					await vscode.window.showTextDocument(doc, {
-						preview: false,
-					});
+					try {
+						const fileUri = vscode.Uri.file(file);
+						const doc = await vscode.workspace.openTextDocument(fileUri);
+						await vscode.window.showTextDocument(doc, { preview: false });
+					} catch (error) {
+						vscode.window.showErrorMessage(
+							`Failed to open file: ${file}. Error: ${error.message}`,
+						);
+					}
 				}
 			} catch (error) {
-				vscode.window.showErrorMessage(`Error: ${error.message}`);
+				vscode.window.showErrorMessage(
+					`Error reading directory: ${basePath}. Error: ${error.message}`,
+				);
 			}
 		},
 	);
@@ -65,112 +77,96 @@ function activate(context) {
 			const input = await vscode.window.showInputBox({
 				placeHolder: "Enter the translation key (e.g., testfile.test.test_words)",
 				prompt: "Find Translation Item",
+				validateInput: (value) => {
+					return value && value.split(".").length > 1
+						? null
+						: "Please enter a valid translation key with at least two parts separated by dots.";
+				},
 			});
 
 			if (!input) {
-				vscode.window.showErrorMessage("No translation key provided");
+				vscode.window.showErrorMessage("No translation key provided. Operation cancelled.");
 				return;
 			}
 
 			const keys = input.split(".");
-			const i18nFolder = `${vscode.workspace.workspaceFolders[0].uri.fsPath}/src/i18n`;
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (!workspaceFolders || workspaceFolders.length === 0) {
+				vscode.window.showErrorMessage(
+					"No workspace folder found. Please open a folder and try again.",
+				);
+				return;
+			}
 
-			try {
-				const languageFolders = await fs.readdir(i18nFolder, { withFileTypes: true });
-				const results = [];
+			const i18nFolder = path.join(workspaceFolders[0].uri.fsPath, "src", "i18n");
+			const languages = await fs.readdir(i18nFolder);
 
-				for (const langFolder of languageFolders) {
-					if (langFolder.isDirectory()) {
-						let currentPath = `${i18nFolder}/${langFolder.name}`;
-						let fileContent;
-						let filePath;
+			for (const lang of languages) {
+				let currentPath = path.join(i18nFolder, lang, "index.js");
+				let currentKey = keys[0];
+				let keyIndex = 0;
 
-						for (let i = 0; i < keys.length; i++) {
-							const key = keys[i];
-							const foundItem = await findItemRecursive(currentPath, key, i === 0);
+				while (keyIndex < keys.length - 1) {
+					const fileContent = await fs.readFile(currentPath, "utf-8");
+					const ast = acorn.parse(fileContent, {
+						ecmaVersion: 2020,
+						sourceType: "module",
+					});
 
-							if (!foundItem) {
-								break;
+					let nextPath = null;
+					simple(ast, {
+						ImportDeclaration(node) {
+							if (node.specifiers.some((spec) => spec.local.name === currentKey)) {
+								nextPath = path.join(
+									path.dirname(currentPath),
+									`${node.source.value}.js`,
+								);
 							}
+						},
+					});
 
-							if (foundItem.isFile && foundItem.name.endsWith(".js")) {
-								fileContent = await fs.readFile(foundItem.path, "utf-8");
-								filePath = foundItem.path;
-								break;
-							}
+					if (!nextPath) break;
 
-							currentPath = foundItem.path;
-						}
+					currentPath = nextPath;
+					keyIndex++;
+					currentKey = keys[keyIndex];
+				}
 
-						if (fileContent) {
-							const match = fileContent.match(/=\s*({[\s\S]*?})/);
-							if (match) {
-								const objectContent = match[1];
-								const fileObject = new Function(`return ${objectContent}`)();
-								const lastKey = keys[keys.length - 1];
-								const value = fileObject[lastKey];
+				if (keyIndex === keys.length - 1) {
+					const fileContent = await fs.readFile(currentPath, "utf-8");
+					const ast = acorn.parse(fileContent, {
+						ecmaVersion: 2020,
+						sourceType: "module",
+					});
 
-								if (value !== undefined) {
-									results.push({ lang: langFolder.name, value, filePath });
-									const lineNumber = fileContent
-										.split("\n")
-										.findIndex((line) => line.includes(lastKey));
-									if (lineNumber !== -1) {
-										const uri = vscode.Uri.file(filePath);
-										const line = fileContent.split("\n")[lineNumber];
-										const position = new vscode.Position(
-											lineNumber,
-											line.length,
-										);
-										const selection = new vscode.Selection(position, position);
-										await vscode.window.showTextDocument(uri, {
-											selection,
-											preview: false,
-										});
-									}
+					let result = null;
+					simple(ast, {
+						ObjectExpression(node) {
+							let current = node;
+							for (let i = keyIndex; i < keys.length; i++) {
+								const property = current.properties.find(
+									(p) => p.key.name === keys[i],
+								);
+								if (!property) return;
+								if (i === keys.length - 1) {
+									result = property.value.value;
+									return;
 								}
+								current = property.value;
 							}
-						}
+						},
+					});
+
+					if (result) {
+						vscode.window.showInformationMessage(`Translation found: ${result}`);
+						return;
 					}
 				}
-
-				if (results.length > 0) {
-					const message = results.map((r) => `${r.lang}: ${r.value}`).join("\n");
-					vscode.window.showInformationMessage(`Found values:\n${message}`);
-				} else {
-					vscode.window.showErrorMessage("No translations found in any language folder");
-				}
-			} catch (error) {
-				vscode.window.showErrorMessage(`Error: ${error.message}`);
 			}
+
+			vscode.window.showErrorMessage("Translation not found.");
 		},
 	);
-
-	async function findItemRecursive(path, key, isFirstKey) {
-		const items = await fs.readdir(path, { withFileTypes: true });
-		for (const item of items) {
-			if (item.isDirectory()) {
-				if (isFirstKey && item.name === key) {
-					return { path: `${path}/${item.name}`, isFile: false, name: item.name };
-				}
-				const nestedResult = await findItemRecursive(
-					`${path}/${item.name}`,
-					key,
-					isFirstKey,
-				);
-				if (nestedResult) {
-					return nestedResult;
-				}
-			} else if (
-				!isFirstKey &&
-				item.isFile() &&
-				(item.name === `${key}.js` || item.name === key)
-			) {
-				return { path: `${path}/${item.name}`, isFile: true, name: item.name };
-			}
-		}
-		return null;
-	}
 
 	context.subscriptions.push(openAllLanguageVariants);
 	context.subscriptions.push(findTranslationItem);

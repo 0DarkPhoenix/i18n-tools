@@ -74,15 +74,38 @@ function activate(context) {
 	const findTranslationItem = vscode.commands.registerCommand(
 		"i18n-tools.findTranslationItem",
 		async () => {
-			const input = await vscode.window.showInputBox({
-				placeHolder: "Enter the translation key (e.g., testfile.test.test_words)",
-				prompt: "Find Translation Item",
-				validateInput: (value) => {
-					return value && value.split(".").length > 1
-						? null
-						: "Please enter a valid translation key with at least two parts separated by dots.";
-				},
-			});
+			const editor = vscode.window.activeTextEditor;
+			if (!editor) {
+				vscode.window.showErrorMessage("No active editor found.");
+				return;
+			}
+
+			const document = editor.document;
+			const position = editor.selection.active;
+			const line = document.lineAt(position.line).text;
+			const translationKeyRegex = /t\(['"](.+?)['"]\)/;
+
+			let input;
+			const lineMatch = line.match(translationKeyRegex);
+			if (lineMatch) {
+				const startIndex = line.indexOf(lineMatch[0]);
+				const endIndex = startIndex + lineMatch[0].length;
+				if (position.character >= startIndex && position.character <= endIndex) {
+					input = lineMatch[1];
+				}
+			}
+
+			if (!input) {
+				input = await vscode.window.showInputBox({
+					placeHolder: "Enter the translation key (e.g., testfile.test.test_words)",
+					prompt: "Find Translation Item",
+					validateInput: (value) => {
+						return value && value.split(".").length > 1
+							? null
+							: "Please enter a valid translation key with at least two parts separated by dots.";
+					},
+				});
+			}
 
 			if (!input) {
 				vscode.window.showErrorMessage("No translation key provided. Operation cancelled.");
@@ -99,7 +122,14 @@ function activate(context) {
 			}
 
 			const i18nFolder = path.join(workspaceFolders[0].uri.fsPath, "src", "i18n");
-			const languages = await fs.readdir(i18nFolder);
+			const items = await fs.readdir(i18nFolder);
+			const items_evaluation = await Promise.all(
+				items.map(async (item) => {
+					const stat = await fs.stat(path.join(i18nFolder, item));
+					return stat.isDirectory() ? item : null;
+				}),
+			);
+			const languages = items_evaluation.filter(Boolean);
 
 			for (const lang of languages) {
 				let currentPath = path.join(i18nFolder, lang, "index.js");
@@ -158,8 +188,22 @@ function activate(context) {
 					});
 
 					if (result) {
-						vscode.window.showInformationMessage(`Translation found: ${result}`);
-						return;
+						const fileUri = vscode.Uri.file(currentPath);
+						const document = await vscode.workspace.openTextDocument(fileUri);
+						const editor = await vscode.window.showTextDocument(document, {
+							preview: false,
+						});
+
+						const text = document.getText();
+						const lines = text.split("\n");
+						const lineIndex = lines.findIndex((line) => line.includes(result));
+
+						if (lineIndex !== -1) {
+							const line = lines[lineIndex];
+							const position = new vscode.Position(lineIndex, line.length);
+							editor.selection = new vscode.Selection(position, position);
+							editor.revealRange(new vscode.Range(position, position));
+						}
 					}
 				}
 			}

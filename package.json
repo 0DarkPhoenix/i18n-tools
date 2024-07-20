@@ -4,13 +4,12 @@
 	"description": "Enhance using translations with i18n tools",
 	"publisher": "DarkPhoenix",
 	"version": "0.0.2",
+	"preview": true,
 	"engines": {
 		"vscode": "^1.90.0"
 	},
 	"icon": "images/logo.png",
-	"categories": [
-		"Other"
-	],
+	"categories": ["Other"],
 	"activationEvents": [
 		"onLanguage:javascript",
 		"onLanguage:typescript",
@@ -46,6 +45,13 @@
 					"command": "i18n-tools.openAllLanguageVariants",
 					"when": "resourceExtname =~ /\\.(json|js|ts|jsx|tsx)$/ && resourcePath =~ /i18n/",
 					"group": "navigation@1"
+				}
+			],
+			"editor/context": [
+				{
+					"when": "editorTextFocus && editorLangId == javascript",
+					"command": "i18n-tools.findTranslationItem",
+					"group": "navigation"
 				}
 			]
 		}

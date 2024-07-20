@@ -8,9 +8,11 @@ const { simple } = require("acorn-walk");
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
+	// Register the command to open all language variants of an i18n file
 	const openAllLanguageVariants = vscode.commands.registerCommand(
 		"i18n-tools.openAllLanguageVariants",
 		async (uri) => {
+			// Check if a file is selected
 			if (!uri || !uri.fsPath) {
 				vscode.window.showErrorMessage(
 					"No file selected. Please select a file in the Explorer.",
@@ -22,6 +24,7 @@ function activate(context) {
 			const parts = filePath.split(path.sep);
 			const i18nIndex = parts.lastIndexOf("i18n");
 
+			// Check if the selected file is within an i18n directory
 			if (i18nIndex === -1) {
 				vscode.window.showErrorMessage(`Not an i18n file: ${filePath}`);
 				return;
@@ -31,9 +34,11 @@ function activate(context) {
 			const relativePath = parts.slice(i18nIndex + 2).join(path.sep);
 
 			try {
+				// Read the i18n directory to find language folders
 				const languageFolders = await fs.readdir(basePath);
 				const languageFiles = [];
 
+				// Check if the corresponding language file exists in each language folder
 				for (const folder of languageFolders) {
 					const fullPath = path.join(basePath, folder, relativePath);
 					try {
@@ -44,6 +49,7 @@ function activate(context) {
 					}
 				}
 
+				// If no corresponding language files are found, show a message
 				if (languageFiles.length === 0) {
 					vscode.window.showInformationMessage(
 						`No corresponding language files found for: ${relativePath}`,
@@ -51,7 +57,7 @@ function activate(context) {
 					return;
 				}
 
-				// Open each language file
+				// Open each corresponding language file in a new editor tab
 				for (const file of languageFiles) {
 					try {
 						const fileUri = vscode.Uri.file(file);
@@ -71,6 +77,7 @@ function activate(context) {
 		},
 	);
 
+	// Register the command to find a translation item
 	const findTranslationItem = vscode.commands.registerCommand(
 		"i18n-tools.findTranslationItem",
 		async () => {
@@ -95,6 +102,7 @@ function activate(context) {
 				}
 			}
 
+			// Prompt the user to enter a translation key if not found in the current line
 			if (!input) {
 				input = await vscode.window.showInputBox({
 					placeHolder: "Enter the translation key (e.g., testfile.test.test_words)",
@@ -131,11 +139,13 @@ function activate(context) {
 			);
 			const languages = items_evaluation.filter(Boolean);
 
+			// Iterate through each language folder to find the translation key
 			for (const lang of languages) {
 				let currentPath = path.join(i18nFolder, lang, "index.js");
 				let currentKey = keys[0];
 				let keyIndex = 0;
 
+				// Traverse the key path to find the final translation value
 				while (keyIndex < keys.length - 1) {
 					const fileContent = await fs.readFile(currentPath, "utf-8");
 					const ast = acorn.parse(fileContent, {
@@ -144,6 +154,8 @@ function activate(context) {
 					});
 
 					let nextPath = null;
+					let foundKey = false;
+
 					simple(ast, {
 						ImportDeclaration(node) {
 							if (node.specifiers.some((spec) => spec.local.name === currentKey)) {
@@ -151,17 +163,30 @@ function activate(context) {
 									path.dirname(currentPath),
 									`${node.source.value}.js`,
 								);
+								foundKey = true;
+							}
+						},
+						Property(node) {
+							if (
+								node.key.name === currentKey &&
+								node.value.type === "ObjectExpression"
+							) {
+								// If the current key is found and it points to an object, continue traversal
+								foundKey = true;
 							}
 						},
 					});
 
-					if (!nextPath) break;
+					if (!foundKey) break;
 
-					currentPath = nextPath;
+					if (nextPath) {
+						currentPath = nextPath;
+					}
 					keyIndex++;
 					currentKey = keys[keyIndex];
 				}
 
+				// If the final key is found, open the corresponding file and highlight the translation
 				if (keyIndex === keys.length - 1) {
 					const fileContent = await fs.readFile(currentPath, "utf-8");
 					const ast = acorn.parse(fileContent, {
@@ -196,22 +221,31 @@ function activate(context) {
 
 						const text = document.getText();
 						const lines = text.split("\n");
-						const lineIndex = lines.findIndex((line) => line.includes(result));
+						const positions = [];
 
-						if (lineIndex !== -1) {
-							const line = lines[lineIndex];
-							const position = new vscode.Position(lineIndex, line.length);
-							editor.selection = new vscode.Selection(position, position);
-							editor.revealRange(new vscode.Range(position, position));
+						lines.forEach((line, lineIndex) => {
+							if (line.includes(result)) {
+								const position = new vscode.Position(lineIndex, line.length);
+								positions.push(position);
+							}
+						});
+
+						if (positions.length > 0) {
+							const selections = positions.map(
+								(position) => new vscode.Selection(position, position),
+							);
+							editor.selections = selections;
+							editor.revealRange(new vscode.Range(positions[0], positions[0]));
 						}
 					}
 				}
 			}
 
-			vscode.window.showErrorMessage("Translation not found.");
+			vscode.window.showInformationMessage("Translation found successfully.");
 		},
 	);
 
+	// Add the commands to the context's subscriptions
 	context.subscriptions.push(openAllLanguageVariants);
 	context.subscriptions.push(findTranslationItem);
 }

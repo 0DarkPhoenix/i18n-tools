@@ -3,7 +3,7 @@
 	"displayName": "I18N Tools International",
 	"description": "Enhance using translations with i18n tools",
 	"publisher": "DarkPhoenix",
-	"version": "0.0.3",
+	"version": "0.0.4",
 	"preview": true,
 	"engines": {
 		"vscode": "^1.90.0"

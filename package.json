@@ -3,13 +3,18 @@
 	"displayName": "I18N Tools International",
 	"description": "Enhance using translations with i18n tools",
 	"publisher": "DarkPhoenix",
-	"version": "0.0.1",
+	"version": "0.2.0",
 	"engines": {
 		"vscode": "^1.90.0"
 	},
 	"icon": "images/logo.png",
 	"categories": ["Other"],
-	"activationEvents": [],
+	"activationEvents": [
+		"onLanguage:javascript",
+		"onLanguage:typescript",
+		"onLanguage:javascriptreact",
+		"onLanguage:typescriptreact"
+	],
 	"main": "./extension.js",
 	"repository": {
 		"type": "git",
@@ -18,25 +23,47 @@
 	"contributes": {
 		"commands": [
 			{
-				"command": "i18n-tools.openAllLanguageVariants",
+				"command": "i18nTools.openAllLanguageVariants",
 				"title": "i18n Tools: Open All Language Variants"
+			},
+			{
+				"command": "i18nTools.findTranslationItem",
+				"title": "i18n Tools: Find Translation Item"
 			}
 		],
 		"menus": {
 			"explorer/context": [
 				{
-					"command": "i18n-tools.openAllLanguageVariants",
+					"command": "i18nTools.openAllLanguageVariants",
 					"when": "resourceExtname =~ /\\.(json|js|ts|jsx|tsx)$/ && resourcePath =~ /i18n/",
 					"group": "navigation@0"
 				}
 			],
 			"editor/title/context": [
 				{
-					"command": "i18n-tools.openAllLanguageVariants",
+					"command": "i18nTools.openAllLanguageVariants",
 					"when": "resourceExtname =~ /\\.(json|js|ts|jsx|tsx)$/ && resourcePath =~ /i18n/",
 					"group": "navigation@1"
 				}
+			],
+			"editor/context": [
+				{
+					"when": "editorTextFocus && editorLangId == javascript",
+					"command": "i18nTools.findTranslationItem",
+					"group": "navigation"
+				}
 			]
+		},
+		"configuration": {
+			"type": "object",
+			"title": "Split MUI Imports",
+			"properties": {
+				"i18nTools.openLanguagesInOrder": {
+					"type": "array",
+					"default": [],
+					"description": "List of languages to open in that particular order. \nIf the list is empty, the languages will be opened in alphabetical order."
+				}
+			}
 		}
 	},
 	"scripts": {
@@ -45,12 +72,16 @@
 		"test": "vscode-test"
 	},
 	"devDependencies": {
-		"@types/vscode": "^1.90.0",
 		"@types/mocha": "^10.0.6",
 		"@types/node": "18.x",
-		"eslint": "^8.57.0",
-		"typescript": "^5.4.5",
+		"@types/vscode": "^1.90.0",
 		"@vscode/test-cli": "^0.0.9",
-		"@vscode/test-electron": "^2.4.0"
+		"@vscode/test-electron": "^2.4.0",
+		"eslint": "^8.57.0",
+		"typescript": "^5.4.5"
+	},
+	"dependencies": {
+		"acorn": "^8.12.1",
+		"acorn-walk": "^8.3.3"
 	}
 }

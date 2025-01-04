@@ -40,6 +40,7 @@ function activate(context) {
 				vscode.window.showErrorMessage(
 					"No file selected. Please select a file in the Explorer.",
 				);
+
 				return;
 			}
 
@@ -156,8 +157,7 @@ function activate(context) {
 			const document = editor.document;
 			const position = editor.selection.active;
 			const line = document.lineAt(position.line).text;
-			const translationKeyRegex = /t\(['"](.+?)['"]\)/;
-
+			const translationKeyRegex = /['"]([^."']+\.[^"']+)['"]/;
 			let input;
 			const lineMatch = line.match(translationKeyRegex);
 			if (lineMatch) {
@@ -197,13 +197,13 @@ function activate(context) {
 
 			const i18nFolder = path.join(workspaceFolders[0].uri.fsPath, "src", "i18n");
 			const items = await fs.readdir(i18nFolder);
-			const items_evaluation = await Promise.all(
+			const itemsEvaluation = await Promise.all(
 				items.map(async (item) => {
 					const stat = await fs.stat(path.join(i18nFolder, item));
 					return stat.isDirectory() ? item : null;
 				}),
 			);
-			const languages = items_evaluation.filter(Boolean);
+			const languages = itemsEvaluation.filter(Boolean);
 
 			// Create a Map to cache file contents
 			const fileCache = new Map();
@@ -217,7 +217,7 @@ function activate(context) {
 				return content;
 			};
 
-			const findInAST = (ast, currentKey) => {
+			const findInAst = (ast, currentKey) => {
 				let nextPath = null;
 				let foundKey = false;
 
@@ -267,7 +267,7 @@ function activate(context) {
 							locations: true,
 						});
 
-						const { nextPath, foundKey } = findInAST(ast, currentKey);
+						const { nextPath, foundKey } = findInAst(ast, currentKey);
 
 						if (!foundKey) {
 							break;

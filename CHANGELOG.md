@@ -1,8 +1,11 @@
+## [0.2.1] - 2025-01-04
+### Fixed
+- Fixed an issue with the `findTranslationItem` command where translation keys wouldn't automatically be detected when the translation hook was on a different line than the translation key
+
 ## [0.2.0] - 2024-12-30
 ### Added
 - Added a new setting to set in which order language files should be opened. If the order of the languages is not set, it will be opened in alphabetical order (e.g. de, en, nl)
 - Added a more advanced and performant search algorithm for `findTranslationItem` to find translation items based on the translation key
-
 
 ## [0.0.5] - 2024-07-23
 ### Fixed

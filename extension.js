@@ -112,8 +112,7 @@ function activate(context) {
 				// First close all related language files that are already open
 				for (const file of languageFiles) {
 					const fileUri = vscode.Uri.file(file);
-					const doc = await vscode.workspace.openTextDocument(fileUri);
-					const tabs = await vscode.window.tabGroups.all.flatMap((g) => g.tabs);
+					const tabs = vscode.window.tabGroups.all.flatMap((g) => g.tabs);
 					const existingTab = tabs.find(
 						(tab) =>
 							tab.input instanceof vscode.TabInputText &&
@@ -194,6 +193,8 @@ function activate(context) {
 				);
 				return;
 			}
+			// Start measuring the execution time
+			const startTime = performance.now();
 
 			const i18nFolder = path.join(workspaceFolders[0].uri.fsPath, "src", "i18n");
 			const items = await fs.readdir(i18nFolder);
@@ -235,6 +236,8 @@ function activate(context) {
 						if (!foundKey) {
 							for (const prop of node.properties) {
 								if (
+									"key" in prop &&
+									"name" in prop.key &&
 									prop.key.name === currentKey &&
 									prop.value.type === "ObjectExpression"
 								) {
@@ -322,8 +325,6 @@ function activate(context) {
 									};
 
 									result = findValue(node, remainingKeys);
-									if (result) {
-									}
 								}
 							},
 						});
@@ -331,6 +332,7 @@ function activate(context) {
 						if (result) {
 							return {
 								path: currentPath,
+								// @ts-ignore
 								...result,
 							};
 						}
@@ -363,8 +365,12 @@ function activate(context) {
 					editor.revealRange(new vscode.Range(position, position));
 				}
 
+				// Calculate the execution time
+				const endTime = performance.now();
+				const duration = Math.round(endTime - startTime); // Parse the float to an integer
+
 				vscode.window.showInformationMessage(
-					`Found ${validResults.length} translations successfully.`,
+					`Found ${validResults.length} translation${validResults.length !== 1 && "s"} in ${duration} ms.`,
 				);
 			} else {
 				vscode.window.showWarningMessage("Translation not found or search timed out.");
